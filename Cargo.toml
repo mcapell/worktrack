@@ -1,0 +1,9 @@
+[package]
+name = "worktrack"
+version = "0.1.0"
+authors = ["Marc Capell <marc.capell@gmail.com>"]
+
+[dependencies]
+clap = "2.31.2"
+colored = "1.6"
+regex = "0.2"
