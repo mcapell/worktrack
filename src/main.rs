@@ -63,14 +63,35 @@ fn parse_file(file: File) -> Vec<WorkDay>{
 }
 
 
-fn report_scrum(work: Vec<WorkDay>) {
+fn report_scrum(work: Vec<WorkDay>, filters: Vec<&str>) {
     let len = work.len() - 1;
+
     println!("{}", "Yesterday:".red().bold());
     for task in work.get(len - 1).unwrap().tasks.iter() {
+        let mut skip = if filters.len() > 0 { true } else { false };
+        for filter in filters.clone() {
+            if task.tag.replace(":", "").starts_with(filter) {
+                skip = false;
+                break;
+            }
+        }
+        if skip {
+            continue;
+        }
         println!("{}", task.title);
     }
     println!("{}", "Today:".red().bold());
     for task in work.get(len).unwrap().tasks.iter() {
+        let mut skip = if filters.len() > 0 { true } else { false };
+        for filter in filters.clone() {
+            if task.tag.replace(":", "").starts_with(filter) {
+                skip = false;
+                break;
+            }
+        }
+        if skip {
+            continue;
+        }
         println!("{}", task.title);
     }
 }
@@ -84,17 +105,34 @@ fn main() {
                          .subcommand(SubCommand::with_name("report")
                                      .about("Report worktrack")
                                      .arg(Arg::with_name("name")
-                                          .help("Report type: scrum,")
-                                          .required(true)))
+                                          .help("Report type")
+                                          .possible_values(&["scrum", ])
+                                          .required(true))
+                                     .arg(Arg::with_name("filter")
+                                          .help("Filter by tag")
+                                          .short("f")
+                                          .long("filter")
+                                          .multiple(true)
+                                          .takes_value(true)))
                          .get_matches();
 
     let filepath = File::open(parser.value_of("file").unwrap()).unwrap();
     let work = parse_file(filepath);
 
     if let Some(report) = parser.subcommand_matches("report") {
+
+        // Parse all tag filters
+        let filters = match report.values_of("filter") {
+            Some(values) => values.collect::<Vec<&str>>(),
+            _ => Vec::new(),
+        };
+
+        // println!("called with filters: {}", filters.join(", "));
+
+
         match report.value_of("name") {
             Some("scrum") => {
-                report_scrum(work);
+                report_scrum(work, filters);
             },
             Some(name) => {
                 println!("Invalid report name: {}", name);
