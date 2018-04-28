@@ -24,29 +24,33 @@ struct WorkDay {
 }
 
 
+// Parse an entire file and return the list of WorkDays
 fn parse_file(file: File) -> Vec<WorkDay>{
-    let reader = BufReader::new(&file);
+    // Date and task regex parsers
+    let date_pattern = Regex::new(
+        r"= (?P<date>\d{4}-\d{2}-\d{2}) \w+ =").unwrap();
+    let task_pattern = Regex::new(
+        r"\* \[.] (?P<title>.*) (?P<tag>:\w+:?\w+:?)").unwrap();
+
     let mut work: Vec<WorkDay> = Vec::new();
     let mut day = WorkDay {
         date: String::from(""),
         tasks: vec![],
     };
-    let date_pattern = Regex::new(
-        r"= (?P<date>\d{4}-\d{2}-\d{2}) \w+ =").unwrap();
-    let task_pattern = Regex::new(
-        r"\* \[.] (?P<title>.*) (?P<tag>:\w+:?\w+:?)").unwrap();
+
+    // Parse the entire file
+    let reader = BufReader::new(&file);
     for line in reader.lines() {
         let l = line.unwrap();
-        if l.starts_with("= 20") {
+
+        if date_pattern.is_match(&l) {
             work.push(day);
             let d = date_pattern.captures(&l).unwrap();
             day = WorkDay {
                 date: d["date"].to_string(),
                 tasks: Vec::new(),
             };
-        } else if l.starts_with("= TODO") {
-            break;
-        } else if l.starts_with("* [") {
+        } else if task_pattern.is_match(&l) {
             match task_pattern.captures(&l) {
                 None => {},
                 Some(t) => {
@@ -58,30 +62,27 @@ fn parse_file(file: File) -> Vec<WorkDay>{
             }
         }
     }
+    // Add the last parsed work day and return the parsed file
     work.push(day);
     work
 }
 
 
+// Report the last two days of the worktrack file
 fn report_scrum(work: Vec<WorkDay>, filters: Vec<&str>) {
     let len = work.len() - 1;
 
     println!("{}", "Yesterday:".red().bold());
-    for task in work.get(len - 1).unwrap().tasks.iter() {
-        let mut skip = if filters.len() > 0 { true } else { false };
-        for filter in filters.clone() {
-            if task.tag.replace(":", "").starts_with(filter) {
-                skip = false;
-                break;
-            }
-        }
-        if skip {
-            continue;
-        }
-        println!("{}", task.title);
-    }
+    print_scrum_tasks(work.get(len - 1).unwrap(), &filters);
+
     println!("{}", "Today:".red().bold());
-    for task in work.get(len).unwrap().tasks.iter() {
+    print_scrum_tasks(work.get(len).unwrap(), &filters);
+}
+
+
+// Print the scrum tasks from a WorkDay
+fn print_scrum_tasks(workday: &WorkDay, filters: &Vec<&str>) {
+    for task in workday.tasks.iter() {
         let mut skip = if filters.len() > 0 { true } else { false };
         for filter in filters.clone() {
             if task.tag.replace(":", "").starts_with(filter) {
@@ -102,12 +103,8 @@ fn main() {
                          .arg(Arg::with_name("file")
                               .help("File path to worktrack")
                               .required(true))
-                         .subcommand(SubCommand::with_name("report")
-                                     .about("Report worktrack")
-                                     .arg(Arg::with_name("name")
-                                          .help("Report type")
-                                          .possible_values(&["scrum", ])
-                                          .required(true))
+                         .subcommand(SubCommand::with_name("scrum")
+                                     .about("Report scrum")
                                      .arg(Arg::with_name("filter")
                                           .help("Filter by tag")
                                           .short("f")
@@ -117,28 +114,17 @@ fn main() {
                          .get_matches();
 
     let filepath = File::open(parser.value_of("file").unwrap()).unwrap();
+
     let work = parse_file(filepath);
 
-    if let Some(report) = parser.subcommand_matches("report") {
+    if let Some(scrum) = parser.subcommand_matches("scrum") {
 
         // Parse all tag filters
-        let filters = match report.values_of("filter") {
+        let filters = match scrum.values_of("filter") {
             Some(values) => values.collect::<Vec<&str>>(),
             _ => Vec::new(),
         };
-
-        // println!("called with filters: {}", filters.join(", "));
-
-
-        match report.value_of("name") {
-            Some("scrum") => {
-                report_scrum(work, filters);
-            },
-            Some(name) => {
-                println!("Invalid report name: {}", name);
-            },
-            _ => {},
-        }
+        report_scrum(work, filters);
     }
 
 }
