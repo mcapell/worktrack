@@ -31,6 +31,7 @@ fn parse_file(file: File) -> Vec<WorkDay>{
         r"= (?P<date>\d{4}-\d{2}-\d{2}) \w+ =").unwrap();
     let task_pattern = Regex::new(
         r"\* \[.] (?P<title>.*) (?P<tag>:\w+:?\w+:?)").unwrap();
+    let ignore_block_pattern = Regex::new(r"= .* =").unwrap();
 
     let mut work: Vec<WorkDay> = Vec::new();
     let mut day = WorkDay {
@@ -40,10 +41,12 @@ fn parse_file(file: File) -> Vec<WorkDay>{
 
     // Parse the entire file
     let reader = BufReader::new(&file);
+    let mut ignore_block = false;
     for line in reader.lines() {
         let l = line.unwrap();
 
         if date_pattern.is_match(&l) {
+            ignore_block = false;
             work.push(day);
             let d = date_pattern.captures(&l).unwrap();
             day = WorkDay {
@@ -51,6 +54,9 @@ fn parse_file(file: File) -> Vec<WorkDay>{
                 tasks: Vec::new(),
             };
         } else if task_pattern.is_match(&l) {
+            if ignore_block {
+                continue;
+            }
             match task_pattern.captures(&l) {
                 None => {},
                 Some(t) => {
@@ -60,6 +66,8 @@ fn parse_file(file: File) -> Vec<WorkDay>{
                     });
                 },
             }
+        } else if ignore_block_pattern.is_match(&l) {
+            ignore_block = true;
         }
     }
     // Add the last parsed work day and return the parsed file
@@ -71,17 +79,14 @@ fn parse_file(file: File) -> Vec<WorkDay>{
 // Report the last two days of the worktrack file
 fn report_scrum(work: Vec<WorkDay>, filters: Vec<&str>) {
     let len = work.len() - 1;
-
-    println!("{}", "Yesterday:".red().bold());
     print_scrum_tasks(work.get(len - 1).unwrap(), &filters);
-
-    println!("{}", "Today:".red().bold());
     print_scrum_tasks(work.get(len).unwrap(), &filters);
 }
 
 
 // Print the scrum tasks from a WorkDay
 fn print_scrum_tasks(workday: &WorkDay, filters: &Vec<&str>) {
+    println!("{}:", workday.date.red().bold());
     for task in workday.tasks.iter() {
         let mut skip = if filters.len() > 0 { true } else { false };
         for filter in filters.clone() {
